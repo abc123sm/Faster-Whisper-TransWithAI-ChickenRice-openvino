@@ -72,7 +72,7 @@ class ContinuousFolderProcessor:
                  use_batch=False,
                  batch_size=8):
         
-        if audio1_dir is None: audio1_dir = PROJECT_ROOT / "audio1"
+        if audio1_dir is None: audio1_dir = PROJECT_ROOT / "audio_not"
         if audio_dir is None: audio_dir = PROJECT_ROOT / "audio"
         if audio_ok_dir is None: audio_ok_dir = PROJECT_ROOT / "audio_ok"
         if output_dir is None: output_dir = PROJECT_ROOT / "sub"
