@@ -7,6 +7,18 @@
 
 High-performance audio/video transcription and translation tool - Japanese-to-Chinese optimized version based on Faster Whisper and voice-optimized VAD
 
+
+## 用法
+安装相关依赖，自己看 req.txt 
+下载whisper模型  
+`git clone https://huggingface.co/chickenrice0721/whisper-large-v2-translate-zh-v0.2-st`  
+使用 `convert_model.py` 转化为openvino模型  
+下载vad  
+`git clone https://huggingface.co/TransWithAI/Whisper-Vad-EncDec-ASMR-onnx`  
+vino_v1.py 里面的一些文件位置啥的还有一些参数自己改改  
+py vino_v1.py  
+
+
 ## ⚠️ 重要声明 / Important Notice
 
 > **本软件为开源软件 / This software is open source**
