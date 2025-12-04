@@ -9,7 +9,7 @@ High-performance audio/video transcription and translation tool - Japanese-to-Ch
 
 
 ## 用法
-安装相关依赖，自己看 req.txt 
+安装相关依赖，自己看 req.txt  
 下载whisper模型  
 `git clone https://huggingface.co/chickenrice0721/whisper-large-v2-translate-zh-v0.2-st`  
 使用 `convert_model.py` 转化为openvino模型  
