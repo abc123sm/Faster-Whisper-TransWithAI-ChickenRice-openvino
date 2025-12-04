@@ -18,7 +18,8 @@ from collections import ChainMap
 from typing import Optional, Dict, Any
 
 import pyjson5
-from faster_whisper import WhisperModel, BatchedInferencePipeline
+#from faster_whisper import WhisperModel, BatchedInferencePipeline
+from whisper import WhisperModel, BatchedInferencePipeline
 import ctranslate2
 
 # Import our VAD injection system

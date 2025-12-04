@@ -131,32 +131,74 @@ class WhisperVADOnnxWrapper:
         opts = ort.SessionOptions()
 
         # Determine execution provider first
+        available_providers = ort.get_available_providers()
         providers = ['CPUExecutionProvider']
-        use_gpu = not force_cpu and 'CUDAExecutionProvider' in ort.get_available_providers()
+        # 优先使用 OpenVINO (Intel GPU), 其次是 CUDA (NVIDIA), 最后是 CPU
+        use_openvino = not force_cpu and 'OpenVINOExecutionProvider' in available_providers
+        use_cuda = not force_cpu and 'CUDAExecutionProvider' in available_providers and not use_openvino
 
-        if use_gpu:
+        if use_openvino:
+            providers.insert(0, 'OpenVINOExecutionProvider')
+            self.device = "GPU (OpenVINO)"
+            logger.info("✅ VAD will use Intel GPU (OpenVINO Execution Provider).")
+            # OpenVINO 通常自己管理线程，可以不设置
+        elif use_cuda:
             providers.insert(0, 'CUDAExecutionProvider')
             self.device = "GPU (CUDA)"
-            # For GPU, use the provided num_threads or default
+            logger.info("✅ VAD will use NVIDIA GPU (CUDA Execution Provider).")
             opts.inter_op_num_threads = num_threads
             opts.intra_op_num_threads = num_threads
         else:
             self.device = "CPU"
-            # For CPU, use half of available processors if num_threads is default (1)
+            logger.info("⚠️ VAD will use CPU.")
+            # For CPU, optimize thread count
             import multiprocessing
             if num_threads == 1:
-                # Use half of CPU count for optimal performance
                 optimal_threads = max(1, multiprocessing.cpu_count() // 2)
                 opts.inter_op_num_threads = optimal_threads
                 opts.intra_op_num_threads = optimal_threads
-                logger.info(_("vad.auto_configured", threads=optimal_threads,
-                    total=multiprocessing.cpu_count()))
+                logger.info(f"Auto-configured VAD CPU threads to {optimal_threads} (Total: {multiprocessing.cpu_count()})")
             else:
-                # Use user-specified thread count
                 opts.inter_op_num_threads = num_threads
                 opts.intra_op_num_threads = num_threads
 
-        self.session = ort.InferenceSession(model_path, providers=providers, sess_options=opts)
+        try:
+            # 创建一个与 providers 列表长度相匹配的 provider_options 列表
+            # 默认为每个 provider 提供一个空选项
+            provider_options = [{} for _ in providers]
+
+            # 如果 OpenVINO 可用，找到它的位置并设置它的专属选项
+            if 'OpenVINOExecutionProvider' in providers:
+                index = providers.index('OpenVINOExecutionProvider')
+                provider_options[index] = {'device_type': 'GPU_FP16'}
+                logger.info("已为OpenVINOExecutionProvider强制配置 'device_type': 'GPU_FP16'")
+
+            self.session = ort.InferenceSession(
+                model_path,
+                providers=providers,
+                provider_options=provider_options, # <-- 现在两个列表长度匹配了
+                sess_options=opts
+            )
+            logger.info("✅ ONNX Session成功创建，Provider选项配置合法。")
+
+        except Exception as e:
+            # 如果强制使用GPU失败，这里会捕获到具体的错误信息
+            logger.error(f"❌ 创建ONNX Session失败！这通常意味着OpenVINO无法在你的GPU上运行。")
+            logger.error(f"   具体错误: {e}")
+            logger.info("   正在尝试回退到仅使用CPU...")
+
+            # 尝试仅使用CPU来创建Session，确保程序还能运行
+            try:
+                self.session = ort.InferenceSession(
+                    model_path,
+                    providers=['CPUExecutionProvider'],
+                    sess_options=opts
+                )
+                self.device = "CPU"
+                logger.info("✅ 成功回退到CPU模式创建Session。")
+            except Exception as cpu_e:
+                logger.error(f"❌ 连CPU模式都失败了！错误: {cpu_e}")
+                raise cpu_e
 
         # Get input/output info
         self.input_name = self.session.get_inputs()[0].name
