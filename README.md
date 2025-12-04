@@ -19,6 +19,23 @@ vino_v1.py 里面的一些文件位置啥的还有一些参数自己改改
 py vino_v1.py  
 
 
+音频放到  
+audio_not  
+然后会一个个拉到  
+audio  
+处理完后拉到  
+audio_ok  
+失败的拉到  
+audio_error  
+输出字幕在  
+sub  
+
+你也可以扔给ai，让他改成原来ai字幕组的那个逻辑
+批处理功能好像改没了……反正我一个核显开了估计也没啥影响………………
+
+代码里有用的就 convert_model.py vino_v1.py src资料夹里面的几个py，别的都是一些cuda或者弄成windows可执行文件用的，都可以删了（
+
+
 ## ⚠️ 重要声明 / Important Notice
 
 > **本软件为开源软件 / This software is open source**
