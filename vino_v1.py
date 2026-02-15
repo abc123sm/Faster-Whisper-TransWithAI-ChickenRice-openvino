@@ -115,7 +115,7 @@ class ContinuousFolderProcessor:
         self.generate_config = {
             "language": "ja",
             "task": "translate",
-            "max_initial_timestamp": 30,
+            # "max_initial_timestamp": 30, # Optimum/Transformers 不支持此参数，需移除以避免报错
             "repetition_penalty": 1.1,
             "return_timestamps": True # 关键：让模型返回时间戳
         }
@@ -418,7 +418,7 @@ class ContinuousFolderProcessor:
 
     def transcribe_audio_file(self, audio_file, output_base):
         """
-        使用 OpenVINO 模型转录单个音频文件，先进行 VAD 分割
+        使用 OpenVINO 模型转录单个音频文件，支持批处理和精确时间轴解析
         """
         try:
             # 1. 使用 librosa 加载音频，自动重采样到16kHz
@@ -426,8 +426,8 @@ class ContinuousFolderProcessor:
             duration = len(audio_input) / sampling_rate
             
             # 2. 使用 VAD 获取语音时间戳
-            # 注意：这里需要导入被注入后的 VAD 函数
             from faster_whisper.vad import get_speech_timestamps
+            # 保持 VAD 参数与 generation_config 一致 (尊重用户设置)
             vad_options = VadOptionsCompat(
                 threshold=0.5,
                 min_speech_duration_ms=300,
@@ -438,33 +438,60 @@ class ContinuousFolderProcessor:
             # 获取语音时间戳
             vad_timestamps = get_speech_timestamps(audio_input, vad_options, sampling_rate)
             
+            all_segments = []
+
             if not vad_timestamps:
                 logger.warning(f"未检测到语音: {audio_file}")
-                # 如果没有检测到语音，处理整个音频
-                segments = self._transcribe_full_audio(audio_input, sampling_rate)
+                # 如果没有检测到语音，处理整个音频作为单个片段
+                segments_data = [{'audio': audio_input, 'start': 0.0, 'duration': duration}]
             else:
-                # 3. 对每个 VAD 片段进行转录
-                all_segments = []
-                for i, vad_seg in enumerate(vad_timestamps):
-                    logger.info(f"处理 VAD 片段 {i+1}/{len(vad_timestamps)}")
-                    
-                    # 切割音频
+                # 3. 收集所有 VAD 片段
+                segments_data = []
+                for vad_seg in vad_timestamps:
                     start_sample = vad_seg['start']
                     end_sample = vad_seg['end']
                     segment_audio = audio_input[start_sample:end_sample]
                     
-                    # 转录这个片段
-                    segment_segments = self._transcribe_audio_segment(segment_audio, sampling_rate)
-                    
-                    # 调整时间戳（加上VAD片段的开始时间）
-                    for seg in segment_segments:
-                        seg.start += start_sample / sampling_rate
-                        seg.end += start_sample / sampling_rate
-                        all_segments.append(seg)
-                
-                segments = all_segments
+                    segments_data.append({
+                        'audio': segment_audio,
+                        'start': start_sample / sampling_rate,
+                        'duration': (end_sample - start_sample) / sampling_rate
+                    })
             
-            # 4. 写入字幕
+            # 4. 执行批处理推理
+            # 如果未启用批处理，则 batch_size 设为 1
+            effective_batch_size = self.batch_size if self.use_batch else 1
+            
+            total_segments = len(segments_data)
+            logger.info(f"开始转录 {total_segments} 个片段 (Batch Size: {effective_batch_size})...")
+            
+            for i in range(0, total_segments, effective_batch_size):
+                batch_data = segments_data[i : i + effective_batch_size]
+                logger.info(f"处理批次 {i//effective_batch_size + 1}/{(total_segments + effective_batch_size - 1)//effective_batch_size} (包含 {len(batch_data)} 个片段)")
+                
+                # 准备批次数据
+                batch_audio = [item['audio'] for item in batch_data]
+                batch_starts = [item['start'] for item in batch_data]
+                batch_durations = [item['duration'] for item in batch_data]
+                
+                # 预处理：Padding
+                input_features = self.processor(
+                    batch_audio, 
+                    sampling_rate=sampling_rate, 
+                    return_tensors="pt",
+                    padding=True # 关键：对齐批次中的音频长度
+                ).input_features
+                
+                # 推理：获取 Token IDs
+                predicted_ids = self.model.generate(input_features, **self.generate_config)
+                
+                # 解码并解析时间戳 (传入绝对起始时间和持续时间)
+                batch_segments = self._decode_batch_with_timestamps(predicted_ids, batch_starts, batch_durations)
+                all_segments.extend(batch_segments)
+
+            segments = all_segments
+            
+            # 5. 写入字幕
             if self.enable_segment_merge:
                 logger.info(f"正在执行智能片段合并... (原始片段数: {len(segments)})")
                 segments = self.merge_segments(segments)
@@ -492,6 +519,108 @@ class ContinuousFolderProcessor:
                     pass
             logger.info(f"✓ 已清理内存和缓存")
 
+    def _decode_batch_with_timestamps(self, predicted_ids, absolute_starts, segment_durations):
+        """
+        基于 Token ID 解析时间戳，并映射到绝对时间轴
+        """
+        # 获取时间戳起始 ID (<|0.00|>)
+        # Whisper tokenizer 通常将时间戳 token 放在特定范围内
+        # 我们假设 processor.tokenizer 已经正确加载
+        
+        # Hugging Face Whisper Tokenizer 的时间戳处理
+        # timestamp_begin 通常是 50364 (openai/whisper)
+        # 但最好动态获取
+        tokenizer = self.processor.tokenizer
+        
+        # 尝试获取 timestamp_begin
+        if hasattr(tokenizer, "timestamp_begin"):
+             timestamp_begin = tokenizer.timestamp_begin
+        else:
+             # Fallback: 尝试转换 <|0.00|>
+             timestamp_begin = tokenizer.convert_tokens_to_ids("<|0.00|>")
+
+        batch_segments = []
+        
+        # 遍历批次中的每个序列
+        # predicted_ids 是 [batch_size, seq_len]
+        for i, token_ids in enumerate(predicted_ids):
+            abs_start = absolute_starts[i]
+            seg_duration = segment_durations[i]
+            
+            # 解码为文本以供参考 (可选，如果只用 Token ID 解析也可以)
+            # 但我们需要 Token ID 来获取精确时间
+            
+            current_segments = []
+            
+            # 简化的状态机解析
+            # 寻找成对的时间戳: [start_ts] text [end_ts]
+            # 或者 [start_ts] [end_ts] (静音)
+            
+            tokens = token_ids.tolist()
+            
+            segment_start_tok = None
+            segment_text_tokens = []
+            
+            for token in tokens:
+                if token >= timestamp_begin:
+                    # 这是一个时间戳 token
+                    ts_val = (token - timestamp_begin) * 0.02
+                    
+                    if segment_start_tok is None:
+                        # 这是一个新的片段开始
+                        segment_start_tok = ts_val
+                        segment_text_tokens = []
+                    else:
+                        # 这是一个片段结束
+                        segment_end_tok = ts_val
+                        
+                        # 解码文本
+                        if segment_text_tokens:
+                            text = tokenizer.decode(segment_text_tokens, skip_special_tokens=True).strip()
+                            if text:
+                                # 映射到绝对时间
+                                final_start = abs_start + segment_start_tok
+                                final_end = abs_start + segment_end_tok
+                                current_segments.append(self.Segment(start=final_start, end=final_end, text=text))
+                        
+                        # 重置状态，当前的结束时间可能是下一个的开始时间
+                        # Whisper 有时输出 [start] text [end] [start] text [end]
+                        # 有时输出 [start] text [end/start] text [end]
+                        # 这里我们简单重置，等待下一个时间戳作为 start
+                        # 注意：如果紧接着就是下一个 start，逻辑上是正确的
+                        segment_start_tok = None
+                        segment_text_tokens = []
+                else:
+                    # 这是一个文本 token (或其他特殊 token)
+                    # 过滤掉非时间戳的特殊 token (如 <|startoftranscript|>, <|ja|>, etc.)
+                    # 简单判断：如果 token < timestamp_begin 且不是 padding
+                    if token < timestamp_begin and token != tokenizer.pad_token_id:
+                         # 检查是否是其他特殊 token，通常 < 50364 的很多都是文本，
+                         # 但前几个是控制 token。
+                         # tokenizer.all_special_ids 包含了所有特殊 token
+                         if token not in tokenizer.all_special_ids:
+                            segment_text_tokens.append(token)
+            
+            # 处理循环结束后遗留的状态 (即 "最后一段 +2s" 的问题根源)
+            if segment_start_tok is not None and segment_text_tokens:
+                text = tokenizer.decode(segment_text_tokens, skip_special_tokens=True).strip()
+                if text:
+                    # 缺少结束时间戳，使用片段实际时长作为兜底
+                    final_start = abs_start + segment_start_tok
+                    # 兜底结束时间 = 绝对起始时间 + 片段总时长
+                    # 或者是 30s (Whisper 窗口限制)
+                    final_end = abs_start + seg_duration
+                    
+                    # 简单的合理性检查：不要超过 30s 窗口
+                    if final_end - final_start > 30.0:
+                         final_end = final_start + 30.0
+                    
+                    current_segments.append(self.Segment(start=final_start, end=final_end, text=text))
+            
+            batch_segments.extend(current_segments)
+            
+        return batch_segments
+
     def _transcribe_full_audio(self, audio_input, sampling_rate):
         """转录整个音频（没有VAD分割）"""
         # 使用 processor 进行预处理
@@ -504,67 +633,17 @@ class ContinuousFolderProcessor:
         # 使用 model.generate() 进行推理
         predicted_ids = self.model.generate(input_features, **self.generate_config)
         
-        # 解码，并解析带时间戳的文本
-        transcription = self.processor.batch_decode(predicted_ids, skip_special_tokens=False, decode_with_timestamps=True)
-        
-        # 将结果解析为与之前兼容的 segments 格式
-        return self._parse_timestamps(transcription[0])
+        # 使用新的解码逻辑
+        duration = len(audio_input) / sampling_rate
+        return self._decode_batch_with_timestamps(predicted_ids, [0.0], [duration])
 
-    def _transcribe_audio_segment(self, segment_audio, sampling_rate):
-        """转录单个音频片段"""
-        # 使用 processor 进行预处理
-        input_features = self.processor(
-            segment_audio, 
-            sampling_rate=sampling_rate, 
-            return_tensors="pt"
-        ).input_features
-        
-        # 使用 model.generate() 进行推理
-        predicted_ids = self.model.generate(input_features, **self.generate_config)
-        
-        # 解码，并解析带时间戳的文本
-        transcription = self.processor.batch_decode(predicted_ids, skip_special_tokens=False, decode_with_timestamps=True)
-        
-        # 将结果解析为与之前兼容的 segments 格式
-        return self._parse_timestamps(transcription[0])
+    # def _transcribe_audio_segment(self, segment_audio, sampling_rate):
+    #     """转录单个音频片段 (已废弃，整合进批处理逻辑)"""
+    #     pass
 
-
-    def _parse_timestamps(self, transcription_with_ts):
-        """
-        解析 `batch_decode` 输出的带时间戳的文本
-        格式: <|startofprev|> <|ja|> <|translate|> <|0.00|> Hello there.<|1.23|> <|1.23|> How are you?<|4.56|> ...
-        """
-        import re
-        # 正则表达式匹配时间戳和紧随其后的文本
-        # <|...|>
-        timestamp_pattern = re.compile(r"<\|(\d+\.\d+)\|>(.*?)(?=<\||$)")
-        
-        matches = timestamp_pattern.findall(transcription_with_ts)
-        
-        segments = []
-        # matches 结果是 [('0.00', ' Hello there.'), ('1.23', ' How are you?'), ...]
-        for i in range(0, len(matches) -1):
-            start_time_str, text = matches[i]
-            end_time_str, _ = matches[i+1]
-            
-            start_time = float(start_time_str)
-            end_time = float(end_time_str)
-            text = text.strip()
-            
-            if text:
-                segments.append(self.Segment(start=start_time, end=end_time, text=text))
-
-        # 处理最后一个片段
-        if len(matches) > 0:
-            last_match = matches[-1]
-            start_time = float(last_match[0])
-            text = last_match[1].strip()
-            if text:
-                # 假设最后一个片段持续2秒，或者根据需要调整
-                end_time = start_time + 2.0
-                segments.append(self.Segment(start=start_time, end=end_time, text=text))
-
-        return segments
+    # def _parse_timestamps(self, transcription_with_ts):
+    #     """解析时间戳 (已废弃，改为基于 Token ID 解析)"""
+    #     pass
     # <<< 变化结束 >>>
     
     def merge_segments(self, segments):
@@ -951,9 +1030,9 @@ def main():
     parser.add_argument('--skip_current', action='store_true',
                        help='跳过当前audio目录，直接从audio1拉取新文件夹')
     parser.add_argument('--use_batch', action='store_true',
-                       help='使用批处理模式（需要更多VRAM）')
-    parser.add_argument('--batch_size', type=int, default=8,
-                       help='批处理大小（仅在使用批处理模式时有效）')
+                       help='使用批处理模式（需要更多VRAM，默认关闭）')
+    parser.add_argument('--batch_size', type=int, default=2,
+                       help='批处理大小（默认：2）')
     # <<< 变化：添加 segment_merge 参数 >>>
     parser.add_argument('--enable_segment_merge', action='store_true',
                        help='启用智能片段合并（默认：False）')
