@@ -68,8 +68,8 @@ class ContinuousFolderProcessor:
                  audio_ok_dir=None,
                  output_dir=None,
                  model_path=None,
-                 device="GPU", # <<< 变化：默认为 "GPU"
-                 compute_type="FP16", # <<< 变化：这个参数现在表示精度
+                 device="GPU",
+                 compute_type="FP16", 
                  use_batch=False,
                  batch_size=8,
                  enable_segment_merge=False):
@@ -106,9 +106,7 @@ class ContinuousFolderProcessor:
         self.device = device
         self.compute_type = compute_type # 现在主要用于日志记录
         self.model = None
-        # <<< 变化开始 >>>
         self.processor = None
-        # <<< 变化结束 >>>
         
         self.processed_folders = []
         self.failed_folders = []
@@ -117,11 +115,10 @@ class ContinuousFolderProcessor:
         self.generate_config = {
             "language": "ja",
             "task": "translate",
-            #"max_initial_timestamp": 30,
+            "max_initial_timestamp": 30,
             "repetition_penalty": 1.1,
             "return_timestamps": True # 关键：让模型返回时间戳
         }
-        # <<< 变化结束 >>>
         
         logger.info("=" * 60)
         logger.info("连续文件夹处理器初始化完成（支持高优先级audio_not）")
@@ -926,7 +923,7 @@ class ContinuousFolderProcessor:
 
 # ------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description='Colab连续文件夹音频转录处理器')
+    parser = argparse.ArgumentParser(description='连续文件夹音频转录处理器')
     parser.add_argument('--audio_not_dir', type=str,
                        default=str(PROJECT_ROOT / "audio_not"),
                        help='高优先级待处理文件夹池路径')
