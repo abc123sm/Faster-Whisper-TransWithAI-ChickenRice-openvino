@@ -1,0 +1,158 @@
+{
+  "app": {
+    "name": "Whisper转录增强版",
+    "description": "基于自定义VAD注入的Whisper转录"
+  },
+
+  "args": {
+    "model_path": "Whisper模型路径",
+    "device": "运行模型的设备 (cpu, cuda, auto)",
+    "compute_type": "模型计算类型",
+    "overwrite": "覆盖现有字幕文件",
+    "audio_extensions": "要处理的音频文件扩展名列表（逗号分隔）",
+    "subtitle_formats": "字幕格式列表（逗号分隔）：lrc, srt, vtt, txt",
+    "output_dir": "字幕文件输出目录",
+    "config_file": "生成配置文件路径",
+    "log_level": "日志级别",
+    "vad_threshold": "覆盖VAD阈值",
+    "min_speech_duration": "覆盖最小语音持续时间（毫秒）",
+    "min_silence_duration": "覆盖最小静音持续时间（毫秒）",
+    "speech_padding": "覆盖语音填充时间（毫秒）",
+    "directories": "要处理的目录或文件"
+  },
+
+  "info": {
+    "output_dir": "输出目录：{output_dir}",
+    "generation_config": "生成配置：{config}",
+    "initializing_vad": "正在初始化增强VAD模型...",
+    "vad_activated": "✓ 增强VAD已激活（阈值={threshold}）",
+    "loading_whisper": "正在加载Whisper模型...",
+    "model_precision": "模型运行精度：{precision}，设备：{device}",
+    "translating": "正在翻译（{current}/{total}）：{path}",
+    "duration": "时长：{duration}",
+    "duration_filtered": "时长：{original} → {filtered}（检测到 {percent} 语音）",
+    "writing": "正在写入：{path}",
+    "vad_deactivated": "VAD注入已停用",
+    "no_files_found": "未找到要翻译的文件",
+    "logging_to_file": "日志文件：{path}",
+    "program_version": "程序版本：{version}",
+    "python_version": "Python版本：{version}",
+    "platform": "运行平台：{platform}",
+    "arguments": "运行参数：{args}",
+    "auto_detected_device": "自动检测到设备：{device}",
+    "auto_selected_compute_type": "自动选择计算类型 '{compute_type}'，设备：'{device}'"
+  },
+
+  "tasks": {
+    "translation": {
+      "one": "翻译任务：{count}",
+      "other": "翻译任务：{count}"
+    }
+  },
+
+  "files": {
+    "found": {
+      "one": "找到 {count} 个文件待处理",
+      "other": "找到 {count} 个文件待处理"
+    },
+    "count": {
+      "one": "{count} 个文件",
+      "other": "{count} 个文件"
+    }
+  },
+
+  "warnings": {
+    "provide_directories": "请提供要翻译的目录",
+    "drag_files": "请将要翻译的文件或目录拖放到此程序上",
+    "unknown_format": "未知格式：{format}",
+    "loaded_vad_config": "已从 {path} 加载VAD配置",
+    "failed_load_vad": "无法从 {path} 加载VAD元数据：{error}",
+    "using_default_vad": "使用默认VAD配置",
+    "vad_file_not_found": "在 {path} 未找到VAD元数据文件",
+    "compute_types_unavailable": "无法获取设备 {device} 支持的计算类型：{error}",
+    "no_preferred_compute_type": "未找到首选计算类型，使用默认值 '{default}'"
+  },
+
+  "progress": {
+    "vad": "VAD进度：{current}/{total} 块（{percent:0.1f}%）在 {device} 上"
+  },
+
+  "debug": {
+    "processing": "正在处理：{path}",
+    "file_suffix": "文件后缀：{suffix}",
+    "valid_suffixes": "有效后缀：{suffixes}",
+    "skipped_suffix": "已跳过 - 后缀 '{suffix}' 不在有效音频格式中",
+    "subtitle_exists": "字幕已存在：{path}",
+    "skipped_all_exist": "已跳过 - 所有字幕格式已存在",
+    "added_task": "为格式添加任务：{formats}",
+    "scanning": "正在扫描：{path}"
+  },
+
+  "time": {
+    "duration_hours": "{hours}小时{minutes}分{seconds:0.0f}秒",
+    "duration_minutes": "{minutes}分{seconds:0.1f}秒",
+    "duration_seconds": "{seconds:0.2f}秒"
+  },
+
+  "format": {
+    "percentage": "{value:0.1f}%"
+  },
+
+  "vad": {
+    "onnx_not_installed": "未安装onnxruntime。请使用以下命令安装：\n  pip install onnxruntime      # CPU版本\n  pip install onnxruntime-gpu  # GPU版本",
+    "transformers_not_installed": "未安装transformers。请使用以下命令安装：\n  pip install transformers",
+    "model_loaded": "ONNX模型已加载：{path}",
+    "auto_configured": "自动配置ONNX使用{threads}个CPU线程（可用{total}个的一半）",
+    "device": "设备：{device}",
+    "providers": "提供器：{providers}",
+    "chunk_duration": "块时长：{duration}毫秒",
+    "frame_duration": "帧时长：{duration}毫秒",
+    "librosa_not_installed": "未安装librosa，假设音频已经是16kHz",
+    "starting": "在 {device} 上开始VAD处理",
+    "total_samples": "总音频采样数：{samples}",
+    "chunk_size": "块大小：{samples} 个采样（{duration}毫秒）",
+    "total_chunks": "待处理总块数：{chunks}",
+    "processing_chunk": "正在处理第 {current}/{total} 块（{percent:0.1f}%）在 {device} 上",
+    "completed": "VAD处理完成：在 {device} 上处理了 {chunks} 块",
+    "model_initialized": "WhisperVadModel已用模型初始化：{path}",
+    "using_device": "使用设备：{device}",
+    "init_failed": "初始化ONNX模型失败：{error}",
+    "path_invalid": "未提供ONNX模型路径或路径不存在：{path}",
+    "not_initialized": "WhisperVadModel：ONNX模型未初始化。请提供有效的ONNX模型路径。",
+    "speech_segments": {
+      "one": "使用Whisper VAD找到 {count} 个语音片段",
+      "other": "使用Whisper VAD找到 {count} 个语音片段"
+    },
+    "registered": "已注册带进度回调的whisper_vad模型",
+    "model_not_found": "未找到模型 {model_id}，使用默认模型",
+    "feature_extractor_loaded": "从本地文件夹加载 WhisperFeatureExtractor: {path}"
+  },
+
+  "injection": {
+    "already_active": "VAD注入已激活，跳过",
+    "patched": "已修补 {path}",
+    "patch_failed": "无法修补 {path}：{error}",
+    "activated_with_model": "VAD注入已激活，使用模型 '{model_id}'",
+    "activated": "VAD注入已激活",
+    "not_active": "VAD注入未激活，无需取消注入",
+    "stop_error": "停止修补时出错：{error}",
+    "auto_injected": "已自动注入VAD，使用模型：{model_id}"
+  },
+
+  "batch": {
+    "finding_optimal": "正在寻找最佳批次大小（测试范围：{min_size}-{max_size}）...",
+    "testing_size": "测试批次大小：{size}",
+    "size_successful": "批次大小 {size} 成功",
+    "optimal_found": "找到最佳批次大小：{size}",
+    "oom_error": "批次大小 {size} 因内存不足而失败",
+    "runtime_error": "批次大小 {size} 失败，错误：{error}",
+    "reducing_size": "将批次大小从 {old_size} 减小到 {new_size}",
+    "no_suitable_size": "即使使用最小批次大小 {min_size} 也无法找到合适的批次大小",
+    "unexpected_error": "测试批次大小 {size} 时出现意外错误：{error}",
+    "attempting_transcription": "尝试使用批次大小={size}进行转录",
+    "auto_adjusted": "内存不足后批次大小自动调整为 {size}",
+    "oom_reducing": "批次大小={old_size}时内存不足，减小到 {new_size} (x0.8)...",
+    "cannot_run_min": "即使使用批次大小={min_size}也无法运行",
+    "inference_failed": "即使使用最小批次大小={min_size}也无法运行推理。请考虑减小模型大小或使用CPU。"
+  }
+}

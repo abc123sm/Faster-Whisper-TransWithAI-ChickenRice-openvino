@@ -1,0 +1,10 @@
+venv/
+audio/
+audio_error/
+audio_not/
+audio_ok/
+sub/
+models/
+.trae/
+plan.md
+__pycache__/

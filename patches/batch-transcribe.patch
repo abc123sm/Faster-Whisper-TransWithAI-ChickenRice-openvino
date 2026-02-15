@@ -1,0 +1,55 @@
+--- a/faster_whisper/transcribe.py
++++ b/faster_whisper/transcribe.py
+@@ -219,6 +219,10 @@
+             for i, language_token in enumerate(language_tokens):
+                 prompts[i][language_token_index] = language_token
+
++        max_initial_timestamp_index = int(
++            round(options.max_initial_timestamp / self.model.time_precision)
++        )
++
+         results = self.model.model.generate(
+             encoder_output,
+             prompts,
+@@ -228,6 +232,7 @@
+             max_length=max_length,
+             suppress_blank=options.suppress_blank,
+             suppress_tokens=options.suppress_tokens,
++            max_initial_timestamp_index=max_initial_timestamp_index,
+             return_scores=True,
+             return_no_speech_prob=True,
+             sampling_temperature=options.temperatures[0],
+@@ -280,7 +285,7 @@
+         prefix: Optional[str] = None,
+         suppress_blank: bool = True,
+         suppress_tokens: Optional[List[int]] = [-1],
+-        without_timestamps: bool = True,
++        without_timestamps: bool = False,
+         max_initial_timestamp: float = 1.0,
+         word_timestamps: bool = False,
+         prepend_punctuations: str = "\"'"¿([{-",
+@@ -321,6 +326,7 @@
+             suppress_tokens: List of token IDs to suppress. -1 will suppress a default set
+                 of symbols as defined in `tokenizer.non_speech_tokens()`.
+             without_timestamps: Only sample text tokens.
++            max_initial_timestamp: The initial timestamp cannot be later than this.
+             word_timestamps: Extract word-level timestamps using the cross-attention pattern
+                 and dynamic time warping, and include the timestamps for each word in each segment.
+                 Set as False.
+@@ -363,7 +369,6 @@
+             prompt_reset_on_temperature: Resets prompt if temperature is above this value.
+                 Arg has effect only if condition_on_previous_text is True. Set at 0.5
+             prefix: Optional text to provide as a prefix at the beginning of each window.
+-            max_initial_timestamp: The initial timestamp cannot be later than this, set at 0.0.
+             hallucination_silence_threshold: Optional[float]
+                 When word_timestamps is True, skip silent periods longer than this threshold
+                 (in seconds) when a possible hallucination is detected. set as None.
+@@ -549,7 +554,7 @@
+             prompt_reset_on_temperature=0.5,
+             multilingual=multilingual,
+             without_timestamps=without_timestamps,
+-            max_initial_timestamp=0.0,
++            max_initial_timestamp=max_initial_timestamp,
+         )
+
+         info = TranscriptionInfo(

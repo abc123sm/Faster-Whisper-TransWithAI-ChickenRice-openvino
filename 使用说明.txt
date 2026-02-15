@@ -1,0 +1,102 @@
+========================================
+⚠️ 重要声明
+========================================
+本软件开源于: https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice
+开发团队: AI汉化组 (https://t.me/transWithAI)
+========================================
+
+基本用法:
+
+将需要转录/翻译的音频或视频文件（或包含它们的文件夹）拖放到相应的批处理文件上运行。
+
+=== 选择运行模式 ===
+
+CPU模式:
+- 拖放到 "运行(CPU).bat" - 使用CPU进行处理
+
+GPU模式（仅限NVIDIA显卡）:
+- 拖放到 "运行(GPU).bat" - 显存≥6GB时使用
+- 拖放到 "运行(GPU,低显存模式).bat" - 显存4GB时使用
+- 建议先更新显卡驱动到最新版本
+
+视频专用模式:
+- 拖放到 "运行(翻译视频)(CPU).bat" - 使用CPU处理视频
+- 拖放到 "运行(翻译视频)(GPU).bat" - 使用GPU处理视频
+- 拖放到 "运行(翻译视频)(GPU,低显存模式).bat" - 低显存GPU处理视频
+
+输出到指定文件夹:
+- 拖放到 "运行(GPU)(输出到当前文件夹).bat" - 字幕输出到"输出"文件夹
+
+=== 支持的格式 ===
+
+音频格式: mp3, wav, flac, m4a, aac, ogg, wma
+视频格式: mp4, mkv, avi, mov, webm, flv, wmv
+
+输出格式:
+- LRC (歌词格式，适合音乐播放器)
+- SRT (常用字幕格式，适合视频播放器)
+- VTT (WebVTT格式，适合网页视频)
+
+所有批处理文件默认会生成这三种格式的字幕。如果字幕文件已存在，将自动跳过。
+
+---
+
+调整参数:
+
+1. 基本参数调整：
+编辑批处理文件，找到以 "%cpath%\infer.exe" 开头的行，在其后添加参数。
+
+示例（添加覆盖模式）:
+添加前: "%cpath%\infer.exe" --device="cuda" %*
+添加后: "%cpath%\infer.exe" --overwrite --device="cuda" %*
+
+常用参数:
+--overwrite : 覆盖已存在的字幕文件
+--output_dir="路径" : 指定输出文件夹（默认输出到源文件所在文件夹）
+--audio_suffixes="mp3,wav" : 自定义处理的文件格式
+--sub_formats="srt,vtt,lrc" : 自定义输出格式
+--log_level="INFO" : 减少控制台输出（默认为DEBUG）
+
+2. 生成参数调整（高级）:
+编辑 generation_config.json5 文件调整转录参数。
+参数详情见下方相关项目链接。
+
+注意：通常不需要调整生成参数。如遇到以下情况可尝试调整：
+- 声音过小导致漏翻
+- 时间轴对不上
+- 出现幻听
+
+---
+
+故障排除:
+
+1. GPU模式无法运行：
+   - 确认是否为NVIDIA显卡
+   - 更新显卡驱动到最新版本
+   - 检查CUDA是否正确安装
+
+2. 字幕未生成：
+   - 检查文件格式是否支持
+   - 查看控制台是否有错误信息
+   - 尝试使用 --overwrite 参数重新生成
+
+3. 内存不足：
+   - 使用低显存模式
+   - 尝试CPU模式
+   - 处理较小的文件或分段处理
+
+---
+
+相关项目：
+
+- Faster Whisper: https://github.com/SYSTRAN/faster-whisper
+- 海南鸡模型 (日文转中文优化): https://huggingface.co/chickenrice0721/whisper-large-v2-translate-zh-v0.2-st
+- 音声优化 VAD 模型: https://huggingface.co/TransWithAI/Whisper-Vad-EncDec-ASMR-onnx
+- OpenAI Whisper: https://github.com/openai/whisper
+- 参数详情: https://github.com/SYSTRAN/faster-whisper/blob/dea24cbcc6cbef23ff599a63be0bbb647a0b23d6/faster_whisper/transcribe.py#L733
+
+致谢：
+- 基于 SYSTRAN/faster-whisper 开发
+- 使用 chickenrice0721 日文转中文优化模型（5000小时音频数据训练）
+- 使用 TransWithAI 音声优化 VAD 模型 (Whisper-Vad-EncDec-ASMR-onnx)
+- 感谢某匿名群友的算力和技术支持
