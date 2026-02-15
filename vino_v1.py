@@ -108,8 +108,8 @@ class ContinuousFolderProcessor:
         self.error_files = []
         
         self.generate_config = {
-            "language": "ja",
-            "task": "translate",
+            # "language": "ja", # 已移至 generation_config.json5 配置
+            # "task": "translate", # 已移至 generation_config.json5 配置
             # "max_initial_timestamp": 30, # Optimum/Transformers 不支持此参数，需移除以避免报错
             "repetition_penalty": 1.1,
             "return_timestamps": True
