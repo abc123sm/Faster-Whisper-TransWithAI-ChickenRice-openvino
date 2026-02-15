@@ -31,4 +31,20 @@
 
     "repetition_penalty": 1.1,
 
+    // 字幕合并/去重配置
+    // Subtitle merge/deduplication configuration
+    "segment_merge": {
+        // 是否启用合并功能
+        // Whether to enable segment merging
+        // false 关闭 true 开启
+        "enabled": false,
+
+        // 两个片段合并允许的最大间隔时间 (毫秒)
+        // Maximum gap between segments allowed for merging (ms)
+        "max_gap_ms": 1000,
+
+        // 合并后片段允许的最大持续时间 (毫秒)
+        // Maximum duration allowed for a merged segment (ms)
+        "max_duration_ms": 30000
+    }
 }

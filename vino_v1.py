@@ -1,4 +1,3 @@
-# colab_batch_processor_auto_continuous.py
 import os
 import sys
 import logging
@@ -7,16 +6,13 @@ import time
 from pathlib import Path
 from faster_whisper import WhisperModel
 import argparse
-# <<< 变化开始 >>>
-# 不再使用 faster_whisper 的 WhisperModel
-# from faster_whisper import WhisperModel
-# import ctranslate2
 import torch
-import librosa # 使用 librosa 加载音频
+import librosa
+import pyjson5
 from transformers import WhisperProcessor
 from optimum.intel import OVModelForSpeechSeq2Seq
 from src.faster_whisper_transwithai_chickenrice.injection import VadOptionsCompat
-# <<< 变化结束 >>>
+
 
 try:
     import openvino
@@ -100,11 +96,10 @@ class ContinuousFolderProcessor:
         self.error_dir.mkdir(parents=True, exist_ok=True)
         
         if model_path is None:
-            # <<< 变化：指向转换后的OpenVINO模型路径
             model_path = str(PROJECT_ROOT / "models" / "whisper-large-v2-ov")
         self.model_path = model_path
         self.device = device
-        self.compute_type = compute_type # 现在主要用于日志记录
+        self.compute_type = compute_type
         self.model = None
         self.processor = None
         
@@ -117,8 +112,51 @@ class ContinuousFolderProcessor:
             "task": "translate",
             # "max_initial_timestamp": 30, # Optimum/Transformers 不支持此参数，需移除以避免报错
             "repetition_penalty": 1.1,
-            "return_timestamps": True # 关键：让模型返回时间戳
+            "return_timestamps": True
         }
+        
+        # Load generation config
+        config_path = PROJECT_ROOT / "generation_config.json5"
+        if config_path.exists():
+            if pyjson5 is None:
+                logger.warning("pyjson5 模块未安装，无法加载 generation_config.json5")
+            else:
+                try:
+                    with open(config_path, "r", encoding='utf-8') as f:
+                        file_config = pyjson5.decode_io(f)
+                        self.generate_config.update(file_config)
+                        logger.info(f"已加载生成配置: {config_path}")
+                except Exception as e:
+                    logger.error(f"加载生成配置失败: {e}")
+                    logger.warning("将使用默认配置运行")
+        else:
+            logger.warning(f"未找到生成配置文件: {config_path}")
+        
+        # Remove unsupported parameters for OpenVINO/Transformers
+        if "max_initial_timestamp" in self.generate_config:
+            del self.generate_config["max_initial_timestamp"]
+            
+        # Ensure return_timestamps is True
+        self.generate_config["return_timestamps"] = True
+        
+        # Extract segment_merge config
+        self.segment_merge_config = self.generate_config.get("segment_merge", {})
+        
+        # Determine enabled state with logging
+        config_enabled = self.segment_merge_config.get("enabled")
+        if config_enabled is not None:
+            logger.info(f"智能片段合并: 遵循配置文件设置 -> {'启用' if config_enabled else '禁用'}")
+            # Ensure it's boolean
+            self.segment_merge_config["enabled"] = bool(config_enabled)
+        else:
+            self.segment_merge_config["enabled"] = enable_segment_merge
+            logger.info(f"智能片段合并: 配置文件未指定，使用命令行/默认设置 -> {'启用' if enable_segment_merge else '禁用'}")
+
+        if self.segment_merge_config["enabled"]:
+             gap = self.segment_merge_config.get("max_gap_ms", 1000)
+             dur = self.segment_merge_config.get("max_duration_ms", 30000)
+             logger.info(f"  - 最大合并间隔: {gap}ms")
+             logger.info(f"  - 最大片段时长: {dur}ms")
         
         logger.info("=" * 60)
         logger.info("连续文件夹处理器初始化完成（支持高优先级audio_not）")
@@ -193,7 +231,6 @@ class ContinuousFolderProcessor:
         inject_vad("whisper_vad", cfg, progress_callback=my_progress_callback)
         logger.info("✓ VAD 注入完成")
     
-    # <<< 变化开始：重写 load_model >>>
     def load_model(self):
         """加载Whisper OpenVINO模型"""
         logger.info(f"正在为 Whisper OpenVINO 模型配置: 设备='{self.device}'")
@@ -215,10 +252,7 @@ class ContinuousFolderProcessor:
             logger.error(f"OpenVINO 模型加载失败: {e}")
             logger.error("请确保模型已成功转换为OpenVINO格式，并检查OpenVINO环境是否正确安装。")
             raise
-    # <<< 变化结束 >>>
-    
-    # ... (get_next_folder, cleanup_audio_dir_safe, _move_to_error_dir, 等方法保持不变) ...
-    # ... (一直到 transcribe_audio_file)
+
     def get_next_folder(self):
         """
         获取下一个待处理的子文件夹（按照优先级）
@@ -483,7 +517,14 @@ class ContinuousFolderProcessor:
                 ).input_features
                 
                 # 推理：获取 Token IDs
-                predicted_ids = self.model.generate(input_features, **self.generate_config)
+                # 准备生成参数，移除不支持的自定义参数
+                generate_kwargs = self.generate_config.copy()
+                keys_to_remove = ["vad_parameters", "segment_merge", "max_initial_timestamp"]
+                for key in keys_to_remove:
+                    if key in generate_kwargs:
+                        del generate_kwargs[key]
+                
+                predicted_ids = self.model.generate(input_features, **generate_kwargs)
                 
                 # 解码并解析时间戳 (传入绝对起始时间和持续时间)
                 batch_segments = self._decode_batch_with_timestamps(predicted_ids, batch_starts, batch_durations)
@@ -492,7 +533,8 @@ class ContinuousFolderProcessor:
             segments = all_segments
             
             # 5. 写入字幕
-            if self.enable_segment_merge:
+            should_merge = getattr(self, "segment_merge_config", {}).get("enabled", False)
+            if should_merge:
                 logger.info(f"正在执行智能片段合并... (原始片段数: {len(segments)})")
                 segments = self.merge_segments(segments)
                 logger.info(f"智能合并完成 (合并后片段数: {len(segments)})")
@@ -631,25 +673,31 @@ class ContinuousFolderProcessor:
         ).input_features
         
         # 使用 model.generate() 进行推理
-        predicted_ids = self.model.generate(input_features, **self.generate_config)
+        # 准备生成参数，移除不支持的自定义参数
+        generate_kwargs = self.generate_config.copy()
+        keys_to_remove = ["vad_parameters", "segment_merge", "max_initial_timestamp"]
+        for key in keys_to_remove:
+            if key in generate_kwargs:
+                del generate_kwargs[key]
+                
+        predicted_ids = self.model.generate(input_features, **generate_kwargs)
         
         # 使用新的解码逻辑
         duration = len(audio_input) / sampling_rate
         return self._decode_batch_with_timestamps(predicted_ids, [0.0], [duration])
 
-    # def _transcribe_audio_segment(self, segment_audio, sampling_rate):
-    #     """转录单个音频片段 (已废弃，整合进批处理逻辑)"""
-    #     pass
-
-    # def _parse_timestamps(self, transcription_with_ts):
-    #     """解析时间戳 (已废弃，改为基于 Token ID 解析)"""
-    #     pass
-    # <<< 变化结束 >>>
-    
     def merge_segments(self, segments):
         """
-        合并重复或包含的片段 (移植自 Faster-Whisper-TransWithAI-ChickenRice)
+        合并重复或包含的片段 (基于 v1.5 逻辑，支持 max_gap_ms 和 max_duration_ms)
         """
+        # 获取配置参数
+        merge_config = getattr(self, "segment_merge_config", {})
+        if not merge_config.get("enabled", True):
+            return segments
+            
+        max_gap = merge_config.get("max_gap_ms", 1000) / 1000.0
+        max_duration = merge_config.get("max_duration_ms", 30000) / 1000.0
+        
         # 1. 首先按开始时间排序
         segments.sort(key=lambda s: s.start)
         merged = []
@@ -666,6 +714,16 @@ class ContinuousFolderProcessor:
             # 3. 向前合并：如果下一个片段的文本以当前片段文本开头（通常是 Whisper 的幻觉或重复修正）
             #    则采用下一个片段的结束时间和文本（因为它包含更完整的信息）
             while j < len(segments):
+                # Check gap
+                gap = segments[j].start - end
+                if gap > max_gap:
+                    break
+                
+                # Check duration
+                new_duration = segments[j].end - start
+                if new_duration > max_duration:
+                    break
+                    
                 if segments[j].text.startswith(text):
                     end, text = segments[j].end, segments[j].text
                     j += 1
@@ -678,6 +736,17 @@ class ContinuousFolderProcessor:
             while k < len(segments):
                 if not segments[k].text.strip():
                     break
+                
+                # Check gap (distance between current end and next start)
+                gap = segments[k].start - end
+                if gap > max_gap:
+                    break
+                
+                # Check duration
+                new_duration = segments[k].end - start
+                if new_duration > max_duration:
+                    break
+                    
                 if text.endswith(segments[k].text):
                     end = segments[k].end
                     k += 1
@@ -741,7 +810,6 @@ class ContinuousFolderProcessor:
         except Exception as e:
             logger.error(f"写入LRC失败: {e}")
 
-    # ... (process_current_folder, process_all_folders, 等方法保持不变) ...
     def process_current_folder(self):
         """
         处理当前audio文件夹中的所有音频文件
@@ -931,7 +999,6 @@ class ContinuousFolderProcessor:
         uninject_vad()
         logger.info("✓ 已清理 VAD")
 
-    # ... (run, print_summary, cleanup等方法保持不变)
     def run(self, max_folders=None):
         """
         主运行函数
@@ -1018,11 +1085,9 @@ def main():
     parser.add_argument('--output_dir', type=str,
                        default=str(PROJECT_ROOT / "sub"),
                        help='字幕输出目录')
-    # <<< 变化：修改模型路径的默认值和帮助信息 >>>
     parser.add_argument('--model_path', type=str,
                        default=str(PROJECT_ROOT / "models" / "whisper-chickenrice-large-v2-ov"),
                        help='转换后的 OpenVINO Whisper 模型路径')
-    # <<< 变化结束 >>>
     parser.add_argument('--max_folders', type=int, default=None,
                        help='最大处理文件夹数，None表示无限制')
     parser.add_argument('--list_only', action='store_true',
@@ -1033,24 +1098,18 @@ def main():
                        help='使用批处理模式（需要更多VRAM，默认关闭）')
     parser.add_argument('--batch_size', type=int, default=2,
                        help='批处理大小（默认：2）')
-    # <<< 变化：添加 segment_merge 参数 >>>
     parser.add_argument('--enable_segment_merge', action='store_true',
                        help='启用智能片段合并（默认：False）')
-    # <<< 变化结束 >>>
-    # <<< 变化：添加设备参数 >>>
     parser.add_argument('--device', type=str, default="GPU",
                        help='推理设备 (例如 GPU, CPU, AUTO)')
-    # <<< 变化结束 >>>
     
     args = parser.parse_args()
     
     # 打印GPU信息
     print("=" * 60)
-    print("Colab连续文件夹处理器 (OpenVINO GPU 加速版)")
+    print("连续文件夹处理器 (OpenVINO GPU 加速版)")
     print("=" * 60)
-    # ... (可以保留旧的打印信息，但现在主要关注OpenVINO)
-    
-    # <<< 变化：初始化 Processor >>>
+
     processor = ContinuousFolderProcessor(
         audio_not_dir=args.audio_not_dir,
         audio1_dir=args.audio1_dir,
@@ -1064,9 +1123,7 @@ def main():
         batch_size=args.batch_size,
         enable_segment_merge=args.enable_segment_merge
     )
-    # <<< 变化结束 >>>
-    
-    # ... (main函数剩余部分保持不变) ...
+
     if args.list_only:
         # 仅列出待处理文件夹
         print(f"待处理的子文件夹 (高优先级: {args.audio_not_dir}):")
