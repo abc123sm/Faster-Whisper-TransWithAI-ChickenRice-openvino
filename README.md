@@ -56,7 +56,7 @@ High-performance audio/video transcription and translation tool - Optimized for 
 - 硬件: 
   - Intel CPU (推荐 11代及以上)
   - Intel GPU (推荐 Iris Xe 或 Arc A系列独显)
-  - 内存: 建议 16GB 及以上
+  - 内存: 建议 16GB 及以上（如果是核显，就算是单线程也会占用8G共享显存）
 
 ### 2. 驱动更新 / Driver Update
 为了获得最佳性能，请确保您的 Intel 显卡驱动已更新至最新版本。
@@ -111,9 +111,18 @@ A: 请检查是否开启了 GPU 加速（默认开启）。如果是首次运行
 
 **Q: 提示找不到 DLL？**
 A: 请确保安装了最新的 VC++ 运行库，并且没有精简版的系统组件缺失。
+ps. 可能还需要安装openvino runtime
 
 **Q: 显存/内存不足？**
 A: OpenVINO 会自动管理内存，但如果遇到内存不足，尝试关闭其他占用大量内存的程序，或在命令行中使用 CPU 模式运行。
+
+**Q: intel独显是否可以使用？**
+A: 我只有用13代的iris xe 96eu试过，我手上没有intel独显与其他任何型号的intel核显，不确定是否可以使用。
+
+**Q: amd核显或独显是否可以使用？**
+A: 你可以下载项目源码，装onnxruntime-directml，然后用dml跑，onnx模型跑dml速度很不错，至少肯定比原来那个项目纯用cpu强，不过最好的方式是你折腾一个rocm的版本，然后开源给大伙用。
+ps. 我曾经用amd的rx580 4g跑过AI画图，用olive，比原版模型+dml速度快好几倍，而且4g显存也能跑1080x1080的图，效果与装了linux后用rocm跑的效果差不多（只是当时画图不能用lora，所以玩一下就丢了）。
+ps2. 现在那张显卡坏了，我也不怎么玩游戏，所以才来折腾核显，如果有人愿意赞助个amd新显卡，我很乐意写个rocm的版本。
 
 ## 📞 技术支持 / Support
 
@@ -121,6 +130,10 @@ A: OpenVINO 会自动管理内存，但如果遇到内存不足，尝试关闭�
 1. 查看[使用说明](使用说明.txt)
 2. 检查显卡驱动是否为最新版本
 3. 提交Issue到项目仓库
+
+## ⭐ 小星星 / Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=abc123sm/Faster-Whisper-TransWithAI-ChickenRice-openvino&type=Date)](https://star-history.com/#abc123sm/Faster-Whisper-TransWithAI-ChickenRice-openvino&Date)
 
 ## 📄 许可证 / License
 
