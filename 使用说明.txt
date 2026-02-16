@@ -1,102 +1,83 @@
 ========================================
 ⚠️ 重要声明
 ========================================
-本软件开源于: https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice
+本软件开源于: abc123sm/Faster-Whisper-TransWithAI-ChickenRice-openvino
+基于原项目: https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice
 开发团队: AI汉化组 (https://t.me/transWithAI)
 ========================================
 
-基本用法:
+使用说明
 
-将需要转录/翻译的音频或视频文件（或包含它们的文件夹）拖放到相应的批处理文件上运行。
+这是一个高性能的音视频转录和翻译工具，专门针对 Intel 硬件（CPU/GPU/NPU）进行了优化，内置了"海南鸡v2"日文转中文模型。
 
-=== 选择运行模式 ===
+=== 🚀 快速开始 ===
 
-CPU模式:
-- 拖放到 "运行(CPU).bat" - 使用CPU进行处理
+【推荐】方式一：拖拽运行
+最简单的使用方法！
+1. 选中您想要处理的：
+   - 音频文件 (.mp3, .wav, .flac 等)
+   - 视频文件 (.mp4, .mkv, .avi 等)
+   - 或者包含这些文件的文件夹
+2. 直接将其拖拽到 `ChickenRice_v2.exe` 图标上。
+3. 程序会自动启动并开始处理。
+4. 字幕文件 (.srt, .vtt, .lrc) 将自动生成在源文件所在的文件夹中。
 
-GPU模式（仅限NVIDIA显卡）:
-- 拖放到 "运行(GPU).bat" - 显存≥6GB时使用
-- 拖放到 "运行(GPU,低显存模式).bat" - 显存4GB时使用
-- 建议先更新显卡驱动到最新版本
+方式二：监控模式 (批量处理)
+如果不拖入任何文件，直接双击运行 `ChickenRice_v2.exe`，程序将进入“监控模式”。
+它会自动扫描以下文件夹：
+- `audio_not`: 高优先级处理目录
+- `audio1`: 低优先级处理目录
 
-视频专用模式:
-- 拖放到 "运行(翻译视频)(CPU).bat" - 使用CPU处理视频
-- 拖放到 "运行(翻译视频)(GPU).bat" - 使用GPU处理视频
-- 拖放到 "运行(翻译视频)(GPU,低显存模式).bat" - 低显存GPU处理视频
+处理完成后，原文件夹会自动移动到 `audio_ok` 目录中。
 
-输出到指定文件夹:
-- 拖放到 "运行(GPU)(输出到当前文件夹).bat" - 字幕输出到"输出"文件夹
+=== 💻 系统要求与驱动 ===
 
-=== 支持的格式 ===
+本程序依赖 Intel OpenVINO 运行时。
+- 操作系统: Windows 10 / 11 (64-bit)
+- 硬件支持: 
+  - Intel Core 处理器 (11代及以上推荐)
+  - Intel Iris Xe 核显
+  - Intel Arc 独立显卡
+  - Intel Core Ultra (NPU加速)
 
-音频格式: mp3, wav, flac, m4a, aac, ogg, wma
-视频格式: mp4, mkv, avi, mov, webm, flv, wmv
+⚠️ 驱动提示:
+为了获得最佳性能，请务必更新您的 Intel 显卡驱动到最新版本！
+下载地址: https://www.intel.com/content/www/us/en/download/785597/intel-arc-iris-xe-graphics-windows.html
 
-输出格式:
-- LRC (歌词格式，适合音乐播放器)
-- SRT (常用字幕格式，适合视频播放器)
-- VTT (WebVTT格式，适合网页视频)
+=== ⚙️ 高级配置 ===
 
-所有批处理文件默认会生成这三种格式的字幕。如果字幕文件已存在，将自动跳过。
+1. 配置文件
+   您可以编辑 `generation_config.json5` 文件来调整转录参数。
+   - `repetition_penalty`: 重复惩罚系数
+   - `beam_size`: 束搜索大小
+   - 更多参数请参考文件内注释。
 
----
+2. 命令行参数
+   如果您习惯使用命令行 (CMD/PowerShell)，支持以下参数：
+   ChickenRice_v2.exe [输入路径] [选项]
 
-调整参数:
+   常用选项:
+   --device [DEVICE]    指定推理设备，可选 GPU, CPU, AUTO。默认 GPU。
+   --output_dir [DIR]   指定字幕输出目录。如果不指定，默认输出到源文件同级目录。
+   --model_path [PATH]  指定模型路径。
 
-1. 基本参数调整：
-编辑批处理文件，找到以 "%cpath%\infer.exe" 开头的行，在其后添加参数。
+   示例:
+   ChickenRice_v2.exe "D:\MyVideo.mp4" --device CPU --output_dir "D:\Subs"
 
-示例（添加覆盖模式）:
-添加前: "%cpath%\infer.exe" --device="cuda" %*
-添加后: "%cpath%\infer.exe" --overwrite --device="cuda" %*
+=== ❓ 常见问题 ===
 
-常用参数:
---overwrite : 覆盖已存在的字幕文件
---output_dir="路径" : 指定输出文件夹（默认输出到源文件所在文件夹）
---audio_suffixes="mp3,wav" : 自定义处理的文件格式
---sub_formats="srt,vtt,lrc" : 自定义输出格式
---log_level="INFO" : 减少控制台输出（默认为DEBUG）
+Q: 第一次运行很慢？
+A: OpenVINO 在第一次在 GPU 上加载模型时需要编译内核，这可能需要几分钟时间。编译后的缓存会保存下来，下一次启动就会非常快。
 
-2. 生成参数调整（高级）:
-编辑 generation_config.json5 文件调整转录参数。
-参数详情见下方相关项目链接。
+Q: 字幕没有生成？
+A: 
+   1. 检查控制台是否有报错信息。
+   2. 确认文件路径没有特殊字符。
+   3. 确保您有该目录的写入权限。
 
-注意：通常不需要调整生成参数。如遇到以下情况可尝试调整：
-- 声音过小导致漏翻
-- 时间轴对不上
-- 出现幻听
+Q: 显存不足？
+A: OpenVINO 会自动尝试管理显存。如果仍然报错，请尝试使用 `--device CPU` 参数强制使用 CPU 运行。
 
----
-
-故障排除:
-
-1. GPU模式无法运行：
-   - 确认是否为NVIDIA显卡
-   - 更新显卡驱动到最新版本
-   - 检查CUDA是否正确安装
-
-2. 字幕未生成：
-   - 检查文件格式是否支持
-   - 查看控制台是否有错误信息
-   - 尝试使用 --overwrite 参数重新生成
-
-3. 内存不足：
-   - 使用低显存模式
-   - 尝试CPU模式
-   - 处理较小的文件或分段处理
-
----
-
-相关项目：
-
-- Faster Whisper: https://github.com/SYSTRAN/faster-whisper
-- 海南鸡模型 (日文转中文优化): https://huggingface.co/chickenrice0721/whisper-large-v2-translate-zh-v0.2-st
-- 音声优化 VAD 模型: https://huggingface.co/TransWithAI/Whisper-Vad-EncDec-ASMR-onnx
-- OpenAI Whisper: https://github.com/openai/whisper
-- 参数详情: https://github.com/SYSTRAN/faster-whisper/blob/dea24cbcc6cbef23ff599a63be0bbb647a0b23d6/faster_whisper/transcribe.py#L733
-
-致谢：
-- 基于 SYSTRAN/faster-whisper 开发
-- 使用 chickenrice0721 日文转中文优化模型（5000小时音频数据训练）
-- 使用 TransWithAI 音声优化 VAD 模型 (Whisper-Vad-EncDec-ASMR-onnx)
-- 感谢某匿名群友的算力和技术支持
+=== 🔗 相关链接 ===
+OpenVINO 模型: https://huggingface.co/boy1981chow/whisper-chickenrice-large-v2-openvino
+原项目: https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice

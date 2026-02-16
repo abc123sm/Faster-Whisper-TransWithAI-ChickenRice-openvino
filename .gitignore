@@ -10,3 +10,6 @@ plan.md
 __pycache__/
 cankao/
 上传抱脸虫.txt
+dist_release/
+build_release/
+releases/

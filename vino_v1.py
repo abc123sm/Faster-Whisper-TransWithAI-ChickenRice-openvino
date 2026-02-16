@@ -25,9 +25,21 @@ except Exception as e:
     print(f"警告: 无法自动添加OpenVINO DLL路径。错误: {e}")
 
 
+# --- 核心修复：区分打包路径 ---
+if getattr(sys, 'frozen', False):
+    # 如果是打包后的环境
+    # sys.executable 是 .exe 的完整路径，它的 parent 是 exe 所在的根目录
+    BUNDLE_ROOT = Path(sys._MEIPASS).resolve()      # 内部资源路径 (对应 _internal)
+    PROJECT_ROOT = Path(sys.executable).parent.resolve() # 外部工作路径 (exe 所在目录)
+else:
+    # 如果是普通的 python 运行环境
+    BUNDLE_ROOT = Path(__file__).parent.resolve()
+    PROJECT_ROOT = Path(__file__).parent.resolve()
+
+
 # 项目路径
-PROJECT_ROOT = Path(__file__).parent.resolve()
-sys.path.insert(0, str(PROJECT_ROOT)) # 确保路径是字符串
+# PROJECT_ROOT = Path(__file__).parent.resolve()
+# sys.path.insert(0, str(PROJECT_ROOT)) # 确保路径是字符串
 
 # 引入 VAD 注入模块
 from src.faster_whisper_transwithai_chickenrice.injection import inject_vad, uninject_vad
@@ -70,12 +82,25 @@ class ContinuousFolderProcessor:
                  batch_size=8,
                  enable_segment_merge=False):
         
-        if audio_not_dir is None: audio_not_dir = PROJECT_ROOT / "audio_not"
-        if audio1_dir is None: audio1_dir = PROJECT_ROOT / "audio1"
-        if audio_dir is None: audio_dir = PROJECT_ROOT / "audio"
-        if audio_ok_dir is None: audio_ok_dir = PROJECT_ROOT / "audio_ok"
-        if output_dir is None: output_dir = PROJECT_ROOT / "sub"
+        self.audio_not_dir = Path(audio_not_dir) if audio_not_dir else PROJECT_ROOT / "audio_not"
+        self.audio1_dir = Path(audio1_dir) if audio1_dir else PROJECT_ROOT / "audio1"
+        self.audio_dir = Path(audio_dir) if audio_dir else PROJECT_ROOT / "audio"
+        self.audio_ok_dir = Path(audio_ok_dir) if audio_ok_dir else PROJECT_ROOT / "audio_ok"
+        self.output_dir = Path(output_dir) if output_dir else PROJECT_ROOT / "sub"
+        self.error_dir = self.audio_dir.parent / "audio_error"
         
+        if model_path is None:
+            # 优先检查程序旁边的 models 文件夹，如果没有，再找 _internal 里的
+            external_model = PROJECT_ROOT / "models" / "whisper-chickenrice-large-v2-ov"
+            internal_model = BUNDLE_ROOT / "models" / "whisper-chickenrice-large-v2-ov"
+            
+            if external_model.exists():
+                self.model_path = str(external_model.resolve())
+            else:
+                self.model_path = str(internal_model.resolve())
+        else:
+            self.model_path = model_path
+
         self.audio_not_dir = Path(audio_not_dir)
         self.audio1_dir = Path(audio1_dir)
         self.audio_dir = Path(audio_dir)
@@ -96,8 +121,13 @@ class ContinuousFolderProcessor:
         self.error_dir.mkdir(parents=True, exist_ok=True)
         
         if model_path is None:
-            model_path = str(PROJECT_ROOT / "models" / "whisper-large-v2-ov")
+            # 修改默认路径为绝对路径
+            model_path = str((PROJECT_ROOT / "models" / "whisper-large-v2-ov").resolve())
         self.model_path = model_path
+        # 确保 self.model_path 是绝对路径
+        if not Path(self.model_path).is_absolute():
+             self.model_path = str(PROJECT_ROOT / self.model_path)
+        self.model_path = str(Path(self.model_path).resolve())
         self.device = device
         self.compute_type = compute_type
         self.model = None
@@ -232,26 +262,49 @@ class ContinuousFolderProcessor:
         logger.info("✓ VAD 注入完成")
     
     def load_model(self):
-        """加载Whisper OpenVINO模型"""
-        logger.info(f"正在为 Whisper OpenVINO 模型配置: 设备='{self.device}'")
-        logger.info(f"加载模型: {self.model_path}")
-        
-        try:
-            # OVModelForSpeechSeq2Seq 需要一个 device 参数，例如 "CPU", "GPU", "AUTO"
-            # "GPU" 会特指Intel的 iGPU 或 dGPU
-            self.model = OVModelForSpeechSeq2Seq.from_pretrained(
-                self.model_path,
-                device=self.device.upper(), # 确保是大写
-                ov_config={"PERFORMANCE_HINT": "LATENCY"}, # 针对单个文件处理进行优化
-                compile=True # 加载时编译模型
-            )
-            self.processor = WhisperProcessor.from_pretrained(self.model_path)
+            """加载Whisper OpenVINO模型"""
+            # 强制开启离线模式，阻止它去生成那种带冒号的非法缓存路径
+            os.environ["HF_HUB_OFFLINE"] = "1" 
             
-            logger.info(f"✓ OpenVINO 模型加载成功 - 设备: {self.device}")
-        except Exception as e:
-            logger.error(f"OpenVINO 模型加载失败: {e}")
-            logger.error("请确保模型已成功转换为OpenVINO格式，并检查OpenVINO环境是否正确安装。")
-            raise
+            logger.info(f"正在为 Whisper OpenVINO 模型配置: 设备='{self.device}'")
+            
+            # 确保路径格式最简化
+            model_p = Path(self.model_path).resolve()
+            model_path_str = str(model_p) # 这里用原生字符串有时比 as_posix 在 Windows 下更稳
+            
+            logger.info(f"加载模型路径: {model_path_str}")
+    
+            if not model_p.exists():
+                logger.error(f"路径不存在: {model_path_str}")
+                raise FileNotFoundError(f"找不到模型目录: {model_path_str}")
+    
+            try:
+                # 加载模型
+                self.model = OVModelForSpeechSeq2Seq.from_pretrained(
+                    model_path_str,
+                    device=self.device.upper(),
+                    ov_config={
+                        "PERFORMANCE_HINT": "LATENCY", 
+                        "CACHE_DIR": str(model_p / "model_cache")
+                    },
+                    compile=True,
+                    local_files_only=True,
+                    export=False,           
+                    trust_remote_code=False # 加上这一行，进一步减少检查
+                )
+                
+                # 加载处理器
+                self.processor = WhisperProcessor.from_pretrained(
+                    model_path_str, 
+                    local_files_only=True
+                )
+                
+                logger.info(f"✓ OpenVINO 模型加载成功 - 设备: {self.device}")
+            except Exception as e:
+                logger.error(f"OpenVINO 模型加载失败: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
 
     def get_next_folder(self):
         """
@@ -999,6 +1052,78 @@ class ContinuousFolderProcessor:
         uninject_vad()
         logger.info("✓ 已清理 VAD")
 
+    def process_direct_inputs(self, paths):
+        """
+        直接处理输入的路径列表 (拖拽模式)
+        """
+        logger.info("=" * 60)
+        logger.info("进入直接处理模式 (拖拽/命令行输入)")
+        logger.info("=" * 60)
+        
+        try:
+            self.setup_vad()
+            self.load_model()
+            
+            # 支持的扩展名 (包含音频和视频)
+            audio_extensions = {'.opus', '.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.wma', 
+                                '.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.ts', '.m2ts'}
+            
+            for path_str in paths:
+                path = Path(path_str).resolve()
+                if not path.exists():
+                    logger.error(f"路径不存在: {path}")
+                    continue
+                
+                files_to_process = []
+                if path.is_file():
+                    if path.suffix.lower() in audio_extensions:
+                        files_to_process.append(path)
+                elif path.is_dir():
+                    logger.info(f"扫描文件夹: {path}")
+                    for ext in audio_extensions:
+                        files_to_process.extend(path.rglob(f"*{ext}"))
+                        # 也要支持大写后缀
+                        files_to_process.extend(path.rglob(f"*{ext.upper()}"))
+                
+                # 去重
+                files_to_process = sorted(list(set(files_to_process)))
+                
+                if not files_to_process:
+                    logger.warning(f"在 {path} 中未找到支持的媒体文件")
+                    continue
+                
+                logger.info(f"找到 {len(files_to_process)} 个待处理文件")
+                
+                for i, audio_file in enumerate(files_to_process, 1):
+                    logger.info(f"[{i}/{len(files_to_process)}] 处理文件: {audio_file.name}")
+                    
+                    # 默认输出到源文件同级目录
+                    # output_base = /path/to/file (无后缀)
+                    # 这样生成的字幕就是 /path/to/file.srt
+                    
+                    # 如果用户指定了非默认的 output_dir，我们应该尊重吗？
+                    # 这里为了简化拖拽体验，默认输出到源目录。
+                    # 如果需要输出到特定目录，我们可以检查 self.output_dir 是否被修改过
+                    # 但简单起见，拖拽模式就放在源目录。
+                    
+                    output_base = str(audio_file.with_suffix(''))
+                    
+                    success, duration = self.transcribe_audio_file(audio_file, output_base)
+                    
+                    if success:
+                         logger.info(f"✓ 完成: {audio_file.name}")
+                    else:
+                         logger.error(f"✗ 失败: {audio_file.name}")
+                         
+        except KeyboardInterrupt:
+            logger.info("用户中断处理")
+        except Exception as e:
+            logger.error(f"处理异常: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.cleanup()
+
     def run(self, max_folders=None):
         """
         主运行函数
@@ -1102,6 +1227,8 @@ def main():
                        help='启用智能片段合并（默认：False）')
     parser.add_argument('--device', type=str, default="GPU",
                        help='推理设备 (例如 GPU, CPU, AUTO)')
+    parser.add_argument('input_paths', nargs='*', default=[],
+                       help='输入文件或文件夹路径 (支持拖拽)')
     
     args = parser.parse_args()
     
@@ -1124,7 +1251,10 @@ def main():
         enable_segment_merge=args.enable_segment_merge
     )
 
-    if args.list_only:
+    if args.input_paths:
+        # 拖拽模式 / 命令行输入模式
+        processor.process_direct_inputs(args.input_paths)
+    elif args.list_only:
         # 仅列出待处理文件夹
         print(f"待处理的子文件夹 (高优先级: {args.audio_not_dir}):")
         not_subfolders = []
