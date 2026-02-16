@@ -64,6 +64,10 @@ rem Copy VAD models (Always needed)
 copy "models\whisper_vad.onnx" "%DIST_DIR%\models\"
 copy "models\whisper_vad_metadata.json" "%DIST_DIR%\models\"
 
+rem Copy VAD config files for offline execution
+if not exist "%DIST_DIR%\models\whisper-base" mkdir "%DIST_DIR%\models\whisper-base"
+copy "models\whisper-base\*" "%DIST_DIR%\models\whisper-base\"
+
 rem --------------------------------------------------
 rem 1. Create No-Model Package (ZIP)
 rem --------------------------------------------------

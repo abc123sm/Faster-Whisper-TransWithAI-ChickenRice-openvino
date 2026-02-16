@@ -107,8 +107,32 @@ class WhisperVADOnnxWrapper:
                 'total_duration_ms': 30000,
             }
 
+        import sys
+        
         # Initialize feature extractor - try local folder first for offline usage
-        local_whisper_base_path = Path("models/whisper-base")
+        # 智能查找项目根目录
+        base_paths = []
+        if getattr(sys, 'frozen', False):
+            # 打包环境：优先检查 exe 旁边，其次检查内部资源
+            base_paths = [
+                Path(sys.executable).parent,
+                Path(getattr(sys, '_MEIPASS', sys.executable))
+            ]
+        else:
+            # 开发环境
+            base_paths = [Path.cwd(), Path(__file__).parent.parent.parent]
+
+        local_whisper_base_path = None
+        for base_path in base_paths:
+            candidate = base_path / "models" / "whisper-base"
+            if candidate.exists() and (candidate / "preprocessor_config.json").exists():
+                local_whisper_base_path = candidate
+                break
+        
+        # Fallback to relative path if not found (backward compatibility)
+        if local_whisper_base_path is None:
+            local_whisper_base_path = Path("models/whisper-base")
+
         if local_whisper_base_path.exists() and (local_whisper_base_path / "preprocessor_config.json").exists():
             # Load from local folder for offline usage
             try:
