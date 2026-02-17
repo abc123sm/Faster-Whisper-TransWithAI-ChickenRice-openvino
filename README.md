@@ -65,12 +65,12 @@ High-performance audio/video transcription and translation tool - Optimized for 
 ### 3. 使用方法 / Usage
 
 #### 方式一：拖拽运行 (推荐)
-直接将音频文件、视频文件或包含媒体文件的**文件夹**拖拽到 `ChickenRice_v2.exe` 图标上即可开始处理。
+直接将音频文件、视频文件或包含媒体文件的**文件夹**拖拽到 `海南鸡饭OPENVINO.exe` 图标上即可开始处理。
 - 程序会自动识别文件类型。
 - 字幕文件将默认生成在源文件同级目录下。
 
 #### 方式二：监控模式
-直接双击运行 `ChickenRice_v2.exe`，程序将进入后台监控模式，自动扫描以下目录：
+直接双击运行 `海南鸡饭OPENVINO.exe`，程序将进入后台监控模式，自动扫描以下目录：
 - `audio_not`: 高优先级处理目录
 - `audio1`: 低优先级处理目录
 处理完成后的文件会自动移动到 `audio_ok` 目录。
@@ -86,13 +86,17 @@ High-performance audio/video transcription and translation tool - Optimized for 
 您可以通过命令行运行程序以使用更多高级选项：
 
 ```bash
-ChickenRice_v2.exe [输入路径] [选项]
+ChickenRice_v2.exe [选项]
 ```
 
 常用选项:
 - `--device [CPU|GPU|AUTO]`: 指定推理设备 (默认: GPU)
-- `--output_dir [路径]`: 指定输出目录
+- `--output_dir [路径]`: 指定字幕输出目录
 - `--model_path [路径]`: 指定模型路径
+- `--use_batch`: 是否使用批量处理 (默认: False)
+- `--batch_size [整数]`: 指定批量处理大小 (默认: 1)
+
+
 
 ### 转录参数调整
 编辑 `generation_config.json5` 文件调整转录参数（如 `repetition_penalty`, `beam_size` 等）。
@@ -106,23 +110,23 @@ ChickenRice_v2.exe [输入路径] [选项]
 
 ## 💡 常见问题 / FAQ
 
-**Q: 运行速度慢？**
+**Q: 运行速度慢？**  
 A: 请检查是否开启了 GPU 加速（默认开启）。如果是首次运行，OpenVINO 需要编译模型内核，可能需要几分钟时间，之后启动会很快，如果嫌这玩意占硬盘可以跑完就删掉，下次跑的时候重新搞。
 
-**Q: 提示找不到 DLL？**
-A: 请确保安装了最新的 VC++ 运行库，并且没有精简版的系统组件缺失。
+**Q: 提示找不到 DLL？**  
+A: 请确保安装了最新的 VC++ 运行库，并且没有精简版的系统组件缺失。  
 ps. 可能还需要安装openvino runtime
 
-**Q: 显存/内存不足？**
+**Q: 显存/内存不足？**  
 A: OpenVINO 会自动管理内存，但如果遇到内存不足，尝试关闭其他占用大量内存的程序，或在命令行中使用 CPU 模式运行。
 
-**Q: intel独显是否可以使用？**
-A: 我只有用13代的iris xe 96eu试过，我手上没有intel独显与其他任何型号的intel核显，不确定是否可以使用。
+**Q: intel独显是否可以使用？**  
+A: 我只有用13代的iris xe 96eu试过，我手上没有intel独显与其他任何型号的intel核显，不确定是否可以使用。  
 ps. 目前有一个B580独显用户回报可以用
 
-**Q: amd核显或独显是否可以使用？**
-A: 你可以下载项目源码，装onnxruntime-directml，然后用dml跑，onnx模型跑dml速度很不错，至少肯定比原来那个项目纯用cpu强，不过最好的方式是你折腾一个rocm的版本，然后开源给大伙用。
-ps. 我曾经用amd的rx580 4g跑过AI画图，用olive，比原版模型+dml速度快好几倍，而且4g显存也能跑1080x1080的图，效果与装了linux后用rocm跑的效果差不多（只是当时画图不能用lora，所以玩一下就丢了）。
+**Q: amd核显或独显是否可以使用？**  
+A: 你可以下载项目源码，装onnxruntime-directml，然后用dml跑，onnx模型跑dml速度很不错，至少肯定比原来那个项目纯用cpu强，不过最好的方式是你折腾一个rocm的版本，然后开源给大伙用。  
+ps. 我曾经用amd的rx580 4g跑过AI画图，用olive，比原版模型+dml速度快好几倍，而且4g显存也能跑1080x1080的图，效果与装了linux后用rocm跑的效果差不多（只是当时画图不能用lora，所以玩一下就丢了）。  
 ps2. 现在那张显卡坏了，我也不怎么玩游戏，所以才来折腾核显，如果有人愿意赞助个amd新显卡，我很乐意写个rocm的版本。
 
 ## 📞 技术支持 / Support
@@ -143,3 +147,4 @@ ps2. 现在那张显卡坏了，我也不怎么玩游戏，所以才来折腾核
 ---
 
 *本工具基于 Faster Whisper 和 OpenVINO 开发，旨在提供高性能的本地化字幕生成方案。*
+*代码基本都是AI写的，不要拿来学习代码。*
