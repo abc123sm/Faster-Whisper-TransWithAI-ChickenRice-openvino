@@ -38,31 +38,31 @@
   - Intel Core 处理器 (11代及以上推荐)
   - Intel Iris Xe 核显
   - Intel Arc 独立显卡
-  - Intel Core Ultra (NPU加速)
+  - Intel Core Ultra (NPU加速(不确定))
 
 ⚠️ 驱动提示:
 为了获得最佳性能，请务必更新您的 Intel 显卡驱动到最新版本！
-下载地址: https://www.intel.com/content/www/us/en/download/785597/intel-arc-iris-xe-graphics-windows.html
 
 === ⚙️ 高级配置 ===
 
 1. 配置文件
    您可以编辑 `generation_config.json5` 文件来调整转录参数。
    - `repetition_penalty`: 重复惩罚系数
-   - `beam_size`: 束搜索大小
    - 更多参数请参考文件内注释。
 
 2. 命令行参数
    如果您习惯使用命令行 (CMD/PowerShell)，支持以下参数：
-   ChickenRice_v2.exe [输入路径] [选项]
+   海南鸡饭OPENVINO.exe [输入路径] [选项]
 
    常用选项:
-   --device [DEVICE]    指定推理设备，可选 GPU, CPU, AUTO。默认 GPU。
-   --output_dir [DIR]   指定字幕输出目录。如果不指定，默认输出到源文件同级目录。
-   --model_path [PATH]  指定模型路径。
+   --device [CDEVICE]   指定推理设备，可选 GPU, CPU, AUTO。默认 GPU。
+   --output_dir [PATH]  指定字幕输出目录
+   --model_path [PATH]  指定模型路径
+   --use_batch          是否使用批量处理
+   --batch_size [整数]`: 指定批量处理大小 (默认: 1)
 
    示例:
-   ChickenRice_v2.exe "D:\MyVideo.mp4" --device CPU --output_dir "D:\Subs"
+   海南鸡饭OPENVINO.exe use_batch --batch_size 16
 
 === ❓ 常见问题 ===
 

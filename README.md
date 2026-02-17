@@ -14,7 +14,7 @@ High-performance audio/video transcription and translation tool - Optimized for 
 > 🔗 **开源地址 / Repository**: >https://github.com/abc123sm/Faster-Whisper-TransWithAI-ChickenRice-openvino
 > 🔗 **原项目地址 / Original Repository**: https://github.com/TransWithAI/Faster-Whisper-TransWithAI-ChickenRice
 
-> 👥 **开发团队 / Development Team**: AI汉化组 (https://t.me/transWithAI)
+> 👥 **开发团队 / Development Team**: 阿龟
 >
 > 本软件完全免费开源 / This software is completely free and open source
 
@@ -24,7 +24,7 @@ High-performance audio/video transcription and translation tool - Optimized for 
 
 - 🚀 基于 [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper) 开发
 - 🐔 使用 [chickenrice0721/whisper-large-v2-translate-zh-v0.2-st](https://huggingface.co/chickenrice0721/whisper-large-v2-translate-zh-v0.2-st) 日文转中文优化模型
-- 🧠 **OpenVINO 模型**: [boy1981chow/whisper-chickenrice-large-v2-openvino](https://huggingface.co/boy1981chow/whisper-chickenrice-large-v2-openvino)
+- 🧠 **OpenVINO 模型**: [boy1981chow/whisper-chickenrice-large-v2-openvino](https://huggingface.co/boy1981chow/whisper-chickenrice-large-v2-openvino) 日文转中文，openvino优化模型
 - 🔊 使用 [TransWithAI/Whisper-Vad-EncDec-ASMR-onnx](https://huggingface.co/TransWithAI/Whisper-Vad-EncDec-ASMR-onnx) 音声优化 VAD 模型
 
 
@@ -86,7 +86,7 @@ High-performance audio/video transcription and translation tool - Optimized for 
 您可以通过命令行运行程序以使用更多高级选项：
 
 ```bash
-ChickenRice_v2.exe [选项]
+海南鸡饭OPENVINO.exe [选项]
 ```
 
 常用选项:
@@ -99,7 +99,7 @@ ChickenRice_v2.exe [选项]
 
 
 ### 转录参数调整
-编辑 `generation_config.json5` 文件调整转录参数（如 `repetition_penalty`, `beam_size` 等）。
+编辑 `generation_config.json5` 文件调整转录参数（如 `repetition_penalty`, `segment_merge` 等）。
 
 ## 🔗 相关链接 / Links
 
